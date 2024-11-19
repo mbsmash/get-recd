@@ -18,7 +18,6 @@ def record_gameplay():
             '-crf', '20',  # Set CRF for video quality (lower is better quality)
             '-r', '60',  # Set output frame rate to 60fps
             '-pix_fmt', 'yuv420p',  # Ensure compatible pixel format
-            '-t', '00:05:00',  # Set recording duration (5 minutes in this case)
             output_file  # Output file path
         ]
 
