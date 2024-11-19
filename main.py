@@ -4,6 +4,8 @@ import subprocess
 import os
 import smbus2
 import time
+from button_listener import button_pressed as button_listener_pressed
+from check_usb_storage import check_usb_storage
 
 # Define GPIO pin connected to the button
 BUTTON_PIN = 17  # GPIO 17
@@ -33,28 +35,15 @@ def lcd_init():
 
 def lcd_write(value, mode):
     """Write a byte to the LCD."""
-    high_nibble = value & 0xF0
-    low_nibble = (value << 4) & 0xF0
-
-    bus.write_byte(LCD_ADDRESS, high_nibble | mode)
-    lcd_toggle_enable(high_nibble | mode)
-    
-    bus.write_byte(LCD_ADDRESS, low_nibble | mode)
-    lcd_toggle_enable(low_nibble | mode)
+    ...
 
 def lcd_toggle_enable(bits):
     """Toggle the enable pin on the LCD."""
-    time.sleep(0.0005)
-    bus.write_byte(LCD_ADDRESS, (bits | 0x04))  # Enable bit high
-    time.sleep(0.0005)
-    bus.write_byte(LCD_ADDRESS, (bits & ~0x04))  # Enable bit low
-    time.sleep(0.0005)
+    ...
 
 def lcd_message(message):
     """Display a message on the LCD."""
-    for i in range(LCD_COLUMNS):
-        if i < len(message):
-            lcd_write(ord(message[i]), 1)  # Send character to LCD
+    ...
 
 def start_recording():
     """Start the recording process."""
@@ -76,15 +65,14 @@ def stop_recording():
     """Stop the recording process."""
     global is_recording
     if is_recording:
-        # Stop the recording (you can handle stopping logic here)
+        # Stop the recording command
         is_recording = False
         print("Recording stopped.")
-        
+
         # Update the LCD with status
         lcd_message("Recording Stopped")
-
-        # Example: Use a command to kill the recording process or any other stop mechanism
-        # subprocess.Popen(['killall', 'ffmpeg'])  # Example for stopping an ffmpeg process
+    else:
+        print("No recording in progress.")
 
 def button_pressed():
     """Handler for button press."""
@@ -99,6 +87,9 @@ button.when_pressed = button_pressed
 
 # Initialize the LCD
 lcd_init()
+
+# Check USB storage
+check_usb_storage()
 
 print("Waiting for button press...")
 lcd_message("Waiting for input...")
