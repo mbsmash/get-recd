@@ -1,3 +1,4 @@
+# comment
 #!/bin/bash
 # Activate the virtual environment
 source /home/pi/myenv/bin/activate
