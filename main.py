@@ -1,15 +1,14 @@
-from gpiozero import Button
-from signal import pause
 import subprocess
 import os
 import smbus2
 import time
-from button_listener import button_pressed as button_listener_pressed
+import key_listener
+import keyboard  # Import the keyboard module
 from check_usb_storage import check_usb_storage
 
 # Define GPIO pin connected to the button
-BUTTON_PIN = 17  # GPIO 17
-button = Button(BUTTON_PIN)
+# BUTTON_PIN = 17  # GPIO 17
+# button = Button(BUTTON_PIN)
 
 # Record flag to track the state of recording
 is_recording = False
@@ -57,7 +56,7 @@ def start_recording():
         lcd_message("Recording Started")
 
         # Command to start recording, adjust this based on your setup
-        subprocess.Popen(['python3', 'record-gameplay.py'])
+        subprocess.Popen(['python3', 'record_gameplay.py'])
     else:
         print("Recording is already in progress.")
 
@@ -83,7 +82,7 @@ def button_pressed():
         start_recording()  # Start the recording if not recording
 
 # Set the function to call when the button is pressed
-button.when_pressed = button_pressed
+# button.when_pressed = button_pressed
 
 # Initialize the LCD
 lcd_init()
@@ -91,6 +90,10 @@ lcd_init()
 # Check USB storage
 check_usb_storage()
 
-print("Waiting for button press...")
+print("Waiting for button press or key press...")
 lcd_message("Waiting for input...")
-pause()  # Keep the script running to detect button presses
+
+# Set the function to call when the key is pressed
+keyboard.add_hotkey('space', button_pressed)  # Replace 'space' with the desired key
+
+keyboard.wait('esc')  # Keep the script running, replace 'esc' with the key to stop the script
