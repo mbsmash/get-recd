@@ -13,8 +13,5 @@ fi
 # Activate the virtual environment
 source $VENV_DIR/bin/activate
 
-# Install the required dependencies
-pip install -r requirements.txt
-
 # Run the main script
 python main.py
