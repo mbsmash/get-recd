@@ -30,7 +30,7 @@ def toggle_recording():
 
 def on_press(key):
     try:
-        if key.char == ' ':
+        if key.char == 'r':
             toggle_recording()
     except AttributeError:
         pass
