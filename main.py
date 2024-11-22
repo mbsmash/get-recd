@@ -9,7 +9,7 @@ def start_recording():
     if not is_recording:
         is_recording = True
         print("Recording started...")
-        recording_process = subprocess.Popen(['python3', 'start_recording.py'])
+        recording_process = subprocess.Popen(['python3', 'record_gameplay.py'])
 
 def stop_recording():
     global is_recording, recording_process
