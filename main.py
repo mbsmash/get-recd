@@ -1,7 +1,5 @@
 import subprocess
-import os
-import signal
-from pynput import keyboard
+import time
 
 is_recording = False
 recording_process = None
@@ -19,31 +17,13 @@ def stop_recording():
         is_recording = False
         print("Recording stopped...")
         if recording_process:
-            os.kill(recording_process.pid, signal.SIGINT)
+            recording_process.terminate()
             recording_process = None
 
-def toggle_recording():
-    if is_recording:
-        stop_recording()
-    else:
-        start_recording()
-
-def on_press(key):
-    try:
-        if key.char == 'r':
-            toggle_recording()
-    except AttributeError:
-        pass
-
-def on_release(key):
-    if key == keyboard.Key.esc:
-        return False
-
 def main():
-    print("Waiting for input...")
-
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        listener.join()
+    print("Waiting for 3 seconds before starting recording...")
+    time.sleep(3)
+    start_recording()
 
 if __name__ == "__main__":
     main()
