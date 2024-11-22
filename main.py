@@ -1,5 +1,7 @@
 import subprocess
-import keyboard
+import os
+import signal
+from pynput import keyboard
 
 is_recording = False
 recording_process = None
@@ -26,13 +28,22 @@ def toggle_recording():
     else:
         start_recording()
 
+def on_press(key):
+    try:
+        if key.char == ' ':
+            toggle_recording()
+    except AttributeError:
+        pass
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        return False
+
 def main():
     print("Waiting for input...")
 
-    # Set the function to call when the key is pressed
-    keyboard.add_hotkey('space', toggle_recording)  # Replace 'space' with the desired key
-
-    keyboard.wait('esc')  # Keep the script running, replace 'esc' with the key to stop the script
+    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+        listener.join()
 
 if __name__ == "__main__":
     main()
