@@ -17,7 +17,7 @@ def stop_recording():
         is_recording = False
         print("Recording stopped...")
         if recording_process:
-            recording_process.terminate()
+            os.kill(recording_process.pid, signal.SIGINT)
             recording_process = None
 
 def toggle_recording():
