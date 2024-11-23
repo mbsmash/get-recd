@@ -1,5 +1,7 @@
 import subprocess
 import time
+import os
+import signal
 
 is_recording = False
 recording_process = None
@@ -18,12 +20,21 @@ def stop_recording():
         print("Recording stopped...")
         if recording_process:
             recording_process.terminate()
+            try:
+                recording_process.wait(timeout=5)
+                print("Recording process terminated successfully.")
+            except subprocess.TimeoutExpired:
+                print("Recording process did not terminate in time, killing it.")
+                recording_process.kill()
             recording_process = None
 
 def main():
     print("Waiting for 3 seconds before starting recording...")
     time.sleep(3)
     start_recording()
+    print("Recording for 10 seconds...")
+    time.sleep(10)
+    stop_recording()
 
 if __name__ == "__main__":
     main()
