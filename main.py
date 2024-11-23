@@ -1,10 +1,10 @@
 import subprocess
 import time
 import os
-import signal
 
 is_recording = False
 recording_process = None
+output_file = 'output.mp4'  # Replace with your actual output file name
 
 def start_recording():
     global is_recording, recording_process
@@ -27,6 +27,11 @@ def stop_recording():
                 print("Recording process did not terminate in time, killing it.")
                 recording_process.kill()
             recording_process = None
+        # Check if the output file exists
+        if os.path.exists(output_file):
+            print(f"Recording file '{output_file}' has been saved successfully.")
+        else:
+            print(f"Recording file '{output_file}' was not found.")
 
 def main():
     print("Waiting for 3 seconds before starting recording...")
