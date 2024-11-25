@@ -1,5 +1,4 @@
 import subprocess
-import time
 import os
 
 is_recording = False
@@ -13,9 +12,9 @@ def start_recording():
         print("Recording started...")
         recording_process = subprocess.Popen(['python3', 'record_gameplay.py'])
         output_file = f"./gameplay_{int(time.time())}.mp4"  # Update with the expected output file name
-        
+
 def stop_recording():
-    global is_recording, recording_process
+    global is_recording, recording_process, output_file
     if is_recording:
         is_recording = False
         print("Recording stopped...")
@@ -35,11 +34,8 @@ def stop_recording():
             print(f"Recording file '{output_file}' was not found.")
 
 def main():
-    print("Waiting for 3 seconds before starting recording...")
-    time.sleep(3)
     start_recording()
-    print("Recording for 10 seconds...")
-    time.sleep(10)
+    input("Press Enter to stop recording...\n")
     stop_recording()
 
 if __name__ == "__main__":
