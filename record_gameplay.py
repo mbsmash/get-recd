@@ -12,8 +12,16 @@ def record_gameplay():
         ffmpeg_command = [
             'ffmpeg',
             '-f', 'v4l2',  # Input format for video capture
+            '-thread_queue_size', '4096',  # Set input queue size
+            '-input_format', 'mjpeg',  # Input format for video capture
+            '-framerate', '60',  # Set input frame rate to 60fps
+            '-video_size', '1280x720',  # Set input video resolution to 720p
             '-i', '/dev/video0',  # Video input device
-            '-c:v', 'libx264',  # Use H.264 encoder
+            '-f', 'alsa',  # Input format for audio capture
+            '-thread_queue_size', '4096',  # Set input queue size
+            '-i', 'hw:2,0',  # Audio input device
+            '-c:v', 'mjpeg', # Set video codec to MJPEG
+            '-c:a', 'aac',  # Set audio codec to AAC
             '-preset', 'fast',  # Set encoder preset for speed vs quality
             '-crf', '20',  # Set CRF for video quality (lower is better quality)
             '-r', '60',  # Set output frame rate to 60fps
