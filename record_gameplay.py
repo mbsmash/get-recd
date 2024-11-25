@@ -1,11 +1,23 @@
 import subprocess
-import datetime
+import sys
 import os
+import signal
+import time
+
+def handle_sigterm(signum, frame):
+    print("Received SIGTERM signal, stopping recording...")
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, handle_sigterm)
+
+timestamp = int(time.time())
+output_file = os.path.join(".", f"gameplay_{timestamp}.mp4")  # Save to current directory
+
+
 
 def record_gameplay():
     # Create a timestamp for the file name
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = os.path.join(".", f"gameplay_{timestamp}.mp4")  # Save to current directory
     
     try:
         # FFmpeg command to record at 720p 60fps and encode on the fly to H.264 MP4
@@ -30,11 +42,12 @@ def record_gameplay():
         ]
 
         # Run FFmpeg command
-        subprocess.run(ffmpeg_command, check=True)
+        process = subprocess.Popen(ffmpeg_command)
+        process.wait()
         print(f"Recording completed successfully. File saved as {output_file}")
 
-    except subprocess.CalledProcessError as e:
-        print(f"Recording failed: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     record_gameplay()
