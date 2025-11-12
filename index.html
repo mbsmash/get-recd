@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Recorder</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: #f0f4f8;
+        background-color: #0e1a2b;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      main {
+        width: min(90vw, 600px);
+        padding: 2rem;
+        background: rgba(18, 32, 56, 0.85);
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+        display: grid;
+        gap: 1.5rem;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(1.8rem, 3vw, 2.4rem);
+        text-align: center;
+      }
+
+      label {
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      select,
+      button {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        border: none;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      select {
+        background-color: #112542;
+        color: inherit;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      button {
+        background: linear-gradient(135deg, #ff6f61, #fe8f6a);
+        color: #0e1a2b;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      button:hover:not([disabled]) {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 25px rgba(254, 143, 106, 0.35);
+      }
+
+      button[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      video {
+        width: 100%;
+        border-radius: 10px;
+        background: #000;
+      }
+
+      .status {
+        min-height: 1.5em;
+        font-size: 0.95rem;
+        opacity: 0.85;
+      }
+
+      .download-link {
+        display: inline-block;
+        margin-top: 0.5rem;
+        text-decoration: none;
+        color: #fee3c8;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Record from a Video Device</h1>
+      <div>
+        <label for="videoSource">Video source</label>
+        <select id="videoSource"></select>
+      </div>
+      <video id="preview" playsinline autoplay muted></video>
+      <button id="recordButton" disabled>Start Recording</button>
+      <div class="status" id="status"></div>
+      <div id="download"></div>
+    </main>
+    <script>
+      const videoSelect = document.getElementById("videoSource");
+      const previewEl = document.getElementById("preview");
+      const recordButton = document.getElementById("recordButton");
+      const statusEl = document.getElementById("status");
+      const downloadEl = document.getElementById("download");
+
+      let currentStream = null;
+      let mediaRecorder = null;
+      let recordedChunks = [];
+      let downloadUrl = null;
+
+      async function stopStream(stream) {
+        if (!stream) return;
+        stream.getTracks().forEach((track) => track.stop());
+      }
+
+      async function populateVideoDevices(devices) {
+        const videoDevices = devices.filter((device) => device.kind === "videoinput");
+        videoSelect.innerHTML = "";
+
+        if (videoDevices.length === 0) {
+          const option = document.createElement("option");
+          option.textContent = "No video devices found";
+          option.value = "";
+          videoSelect.appendChild(option);
+          recordButton.disabled = true;
+          statusEl.textContent = "No video inputs available.";
+          return;
+        }
+
+        for (const device of videoDevices) {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent = device.label || `Camera ${videoSelect.length + 1}`;
+          videoSelect.appendChild(option);
+        }
+
+        recordButton.disabled = false;
+      }
+
+      async function refreshDevices() {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          await populateVideoDevices(devices);
+        } catch (error) {
+          console.error("Failed to enumerate devices", error);
+          statusEl.textContent = "Unable to list video devices.";
+        }
+      }
+
+      async function startPreview(deviceId) {
+        try {
+          await stopStream(currentStream);
+          const constraints = {
+            audio: false,
+            video: deviceId ? { deviceId: { exact: deviceId } } : true,
+          };
+          currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+          previewEl.srcObject = currentStream;
+          statusEl.textContent = "Previewing device.";
+        } catch (error) {
+          console.error("Failed to start preview", error);
+          statusEl.textContent = "Failed to access the selected device.";
+          recordButton.disabled = true;
+        }
+      }
+
+      videoSelect.addEventListener("change", (event) => {
+        const deviceId = event.target.value;
+        if (deviceId) {
+          startPreview(deviceId);
+        }
+      });
+
+      recordButton.addEventListener("click", () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+          return;
+        }
+
+        if (!currentStream) {
+          statusEl.textContent = "Select a video source first.";
+          return;
+        }
+
+        recordedChunks = [];
+        try {
+          mediaRecorder = new MediaRecorder(currentStream, {
+            mimeType: "video/webm;codecs=vp9,opus",
+          });
+        } catch (error) {
+          console.warn("Falling back to default MediaRecorder", error);
+          mediaRecorder = new MediaRecorder(currentStream);
+        }
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstart = () => {
+          statusEl.textContent = "Recording...";
+          recordButton.textContent = "Stop Recording";
+          recordButton.disabled = false;
+          if (downloadUrl) {
+            URL.revokeObjectURL(downloadUrl);
+            downloadUrl = null;
+            downloadEl.innerHTML = "";
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          statusEl.textContent = "Recording stopped.";
+          recordButton.textContent = "Start Recording";
+          recordButton.disabled = false;
+          const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+          downloadUrl = URL.createObjectURL(blob);
+
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          link.download = `recording-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
+          link.className = "download-link";
+          link.textContent = "Download recording";
+          downloadEl.innerHTML = "";
+          downloadEl.appendChild(link);
+        };
+
+        mediaRecorder.onerror = (event) => {
+          console.error("MediaRecorder error", event.error);
+          statusEl.textContent = `Error: ${event.error?.message || event.error}`;
+        };
+
+        mediaRecorder.start();
+        recordButton.disabled = false;
+      });
+
+      async function init() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          statusEl.textContent = "Your browser does not support media capture.";
+          recordButton.disabled = true;
+          return;
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          await stopStream(stream);
+          await refreshDevices();
+          if (videoSelect.value) {
+            await startPreview(videoSelect.value);
+          }
+        } catch (error) {
+          console.error("Permission denied or no devices", error);
+          statusEl.textContent = "Unable to access video devices. Check permissions.";
+        }
+      }
+
+      window.addEventListener("beforeunload", () => {
+        stopStream(currentStream);
+        if (downloadUrl) {
+          URL.revokeObjectURL(downloadUrl);
+        }
+      });
+
+      init();
+    </script>
+  </body>
+</html>
