@@ -152,6 +152,7 @@
 
       async function populateVideoDevices(devices) {
         const videoDevices = devices.filter((device) => device.kind === "videoinput");
+        const previousSelection = videoSelect.value;
         videoSelect.innerHTML = "";
 
         if (videoDevices.length === 0) {
@@ -164,14 +165,27 @@
           return;
         }
 
+        let selectedDeviceId = "";
+
         for (const device of videoDevices) {
           const option = document.createElement("option");
           option.value = device.deviceId;
           option.textContent = device.label || `Camera ${videoSelect.length + 1}`;
+          if (!selectedDeviceId) {
+            selectedDeviceId = device.deviceId;
+          }
+          if (previousSelection && previousSelection === device.deviceId) {
+            selectedDeviceId = device.deviceId;
+          }
           videoSelect.appendChild(option);
         }
 
+        videoSelect.value = previousSelection && selectedDeviceId === previousSelection ? previousSelection : selectedDeviceId;
         updateRecordButtonState();
+
+        if (!currentStream && videoSelect.value !== null) {
+          startPreview(videoSelect.value || undefined);
+        }
       }
 
       async function refreshDevices() {
@@ -210,9 +224,7 @@
 
       videoSelect.addEventListener("change", (event) => {
         const deviceId = event.target.value;
-        if (deviceId) {
-          startPreview(deviceId);
-        }
+        startPreview(deviceId || undefined);
       });
 
       saveLocationButton.addEventListener("click", async () => {
@@ -336,10 +348,6 @@
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
           await stopStream(stream);
-          await refreshDevices();
-          if (videoSelect.value) {
-            await startPreview(videoSelect.value);
-          }
         } catch (error) {
           console.error("Permission denied or no devices", error);
           const needsSecureContext = !isSecure
@@ -349,6 +357,11 @@
             `Unable to access video devices. Check permissions${needsSecureContext}.`,
             true
           );
+        } finally {
+          await refreshDevices();
+          if (videoSelect.value) {
+            startPreview(videoSelect.value);
+          }
         }
       }
 
