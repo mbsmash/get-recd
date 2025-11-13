@@ -99,6 +99,14 @@
         <label for="audioSource">Audio source</label>
         <select id="audioSource"></select>
       </div>
+      <div>
+        <label for="resolutionPreference">Resolution preference</label>
+        <select id="resolutionPreference">
+          <option value="auto">Browser default</option>
+          <option value="1080p">Prefer 1080p</option>
+          <option value="720p">Prefer 720p</option>
+        </select>
+      </div>
       <video id="preview" playsinline autoplay muted></video>
       <button id="saveLocationButton">Choose Save Location</button>
       <button id="recordButton" disabled>Start Recording</button>
@@ -107,6 +115,7 @@
     <script>
       const videoSelect = document.getElementById("videoSource");
       const audioSelect = document.getElementById("audioSource");
+      const resolutionSelect = document.getElementById("resolutionPreference");
       const previewEl = document.getElementById("preview");
       const recordButton = document.getElementById("recordButton");
       const saveLocationButton = document.getElementById("saveLocationButton");
@@ -154,6 +163,23 @@
         } else {
           recordButton.disabled = !readyToRecord;
         }
+      }
+
+      function buildVideoConstraints() {
+        const constraint = {};
+        if (videoSelect.value) {
+          constraint.deviceId = { exact: videoSelect.value };
+        }
+
+        if (resolutionSelect.value === "1080p") {
+          constraint.width = { ideal: 1920 };
+          constraint.height = { ideal: 1080 };
+        } else if (resolutionSelect.value === "720p") {
+          constraint.width = { ideal: 1280 };
+          constraint.height = { ideal: 720 };
+        }
+
+        return Object.keys(constraint).length ? constraint : true;
       }
 
       function populateSelect(selectEl, devices, previousSelection, labelPrefix, emptyMessage) {
@@ -240,13 +266,16 @@
                 ? { deviceId: { exact: audioSelect.value } }
                 : true
               : false,
-            video: videoSelect.value ? { deviceId: { exact: videoSelect.value } } : true,
+            video: buildVideoConstraints(),
           };
           currentStream = await navigator.mediaDevices.getUserMedia(constraints);
           previewEl.srcObject = currentStream;
+          const videoTrack = currentStream.getVideoTracks()[0];
+          const { width, height } = videoTrack?.getSettings?.() ?? {};
+          const resolutionNote = width && height ? ` Resolution: ${width}×${height}.` : "";
           const previewMessage = hasAudioInputs
-            ? "Previewing device with audio."
-            : "Previewing video device. No microphones detected, so recording will be silent.";
+            ? `Previewing device with audio.${resolutionNote}`
+            : `Previewing video device. No microphones detected, so recording will be silent.${resolutionNote}`;
           setStatus(previewMessage, !hasAudioInputs);
           updateRecordButtonState();
         } catch (error) {
@@ -268,6 +297,10 @@
 
       audioSelect.addEventListener("change", () => {
         if (!hasAudioInputs) return;
+        startPreview();
+      });
+
+      resolutionSelect.addEventListener("change", () => {
         startPreview();
       });
 
