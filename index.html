@@ -111,12 +111,29 @@
       let mediaRecorder = null;
       let fileHandle = null;
       let writableStream = null;
-      const supportsFileSystemAccess = typeof window.showSaveFilePicker === "function";
+      const supportsFileSystemAccess =
+        typeof window.showSaveFilePicker === "function" && window.isSecureContext;
 
-      if (!supportsFileSystemAccess) {
+      const isSecure = window.isSecureContext;
+
+      function setStatus(message, isError = false) {
+        statusEl.textContent = message;
+        statusEl.style.color = isError ? "#ffb4a2" : "";
+      }
+
+      if (!isSecure) {
+        recordButton.disabled = true;
         saveLocationButton.disabled = true;
-        statusEl.textContent =
-          "This browser cannot choose a save location. Please use a Chromium-based browser.";
+        setStatus(
+          "Camera access and direct-to-disk saving require HTTPS (or localhost). Please host this page securely.",
+          true
+        );
+      } else if (!supportsFileSystemAccess) {
+        saveLocationButton.disabled = true;
+        setStatus(
+          "This browser disables the File System Access API (for example Brave does this by default). Use Chrome, Edge, Arc, or another browser that lets you choose a save location.",
+          true
+        );
       }
 
       async function stopStream(stream) {
@@ -143,7 +160,7 @@
           option.value = "";
           videoSelect.appendChild(option);
           recordButton.disabled = true;
-          statusEl.textContent = "No video inputs available.";
+          setStatus("No video inputs available.", true);
           return;
         }
 
@@ -163,7 +180,7 @@
           await populateVideoDevices(devices);
         } catch (error) {
           console.error("Failed to enumerate devices", error);
-          statusEl.textContent = "Unable to list video devices.";
+          setStatus("Unable to list video devices.", true);
         }
       }
 
@@ -176,11 +193,17 @@
           };
           currentStream = await navigator.mediaDevices.getUserMedia(constraints);
           previewEl.srcObject = currentStream;
-          statusEl.textContent = "Previewing device.";
+          setStatus("Previewing device.");
           updateRecordButtonState();
         } catch (error) {
           console.error("Failed to start preview", error);
-          statusEl.textContent = "Failed to access the selected device.";
+          const hint =
+            error.name === "NotAllowedError"
+              ? "Check that camera permissions are granted."
+              : error.name === "NotReadableError"
+              ? "Another application may already be using the device."
+              : "";
+          setStatus(`Failed to access the selected device. ${hint}`.trim(), true);
           recordButton.disabled = true;
         }
       }
@@ -194,8 +217,10 @@
 
       saveLocationButton.addEventListener("click", async () => {
         if (!supportsFileSystemAccess) {
-          statusEl.textContent =
-            "Selecting a save location requires a Chromium-based browser (Edge, Chrome).";
+          setStatus(
+            "Selecting a save location requires a browser with File System Access support (Chrome, Edge, Arc, etc.).",
+            true
+          );
           return;
         }
 
@@ -209,12 +234,12 @@
             ],
             suggestedName: `recording-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`,
           });
-          statusEl.textContent = "Save location ready. Start recording when you're ready.";
+          setStatus("Save location ready. Start recording when you're ready.");
           updateRecordButtonState();
         } catch (error) {
           if (error.name !== "AbortError") {
             console.error("Save location selection failed", error);
-            statusEl.textContent = "Unable to select a save location.";
+            setStatus("Unable to select a save location.", true);
           }
         }
       });
@@ -226,12 +251,12 @@
         }
 
         if (!currentStream) {
-          statusEl.textContent = "Select a video source first.";
+          setStatus("Select a video source first.", true);
           return;
         }
 
         if (!fileHandle) {
-          statusEl.textContent = "Choose a save location before recording.";
+          setStatus("Choose a save location before recording.", true);
           return;
         }
 
@@ -239,7 +264,7 @@
           writableStream = await fileHandle.createWritable();
         } catch (error) {
           console.error("Failed to open writable stream", error);
-          statusEl.textContent = "Could not open the selected file for writing.";
+          setStatus("Could not open the selected file for writing.", true);
           return;
         }
 
@@ -260,14 +285,14 @@
               await writableStream.write(event.data);
             } catch (error) {
               console.error("Failed to write chunk", error);
-              statusEl.textContent = "Writing to disk failed. Recording stopped.";
+              setStatus("Writing to disk failed. Recording stopped.", true);
               mediaRecorder?.stop();
             }
           }
         };
 
         mediaRecorder.onstart = () => {
-          statusEl.textContent = "Recording...";
+          setStatus("Recording...");
           recordButton.textContent = "Stop Recording";
           recordButton.disabled = false;
         };
@@ -278,23 +303,23 @@
           if (writableStream) {
             try {
               await writableStream.close();
-              statusEl.textContent = "Recording saved to the selected location.";
+              setStatus("Recording saved to the selected location.");
             } catch (error) {
               console.error("Failed to close writable stream", error);
-              statusEl.textContent = "Recording finished, but saving may have failed.";
+              setStatus("Recording finished, but saving may have failed.", true);
             } finally {
               writableStream = null;
               fileHandle = null;
             }
           } else {
-            statusEl.textContent = "Recording stopped.";
+            setStatus("Recording stopped.");
           }
           updateRecordButtonState();
         };
 
         mediaRecorder.onerror = (event) => {
           console.error("MediaRecorder error", event.error);
-          statusEl.textContent = `Error: ${event.error?.message || event.error}`;
+          setStatus(`Error: ${event.error?.message || event.error}`, true);
         };
 
         mediaRecorder.start();
@@ -303,7 +328,7 @@
 
       async function init() {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          statusEl.textContent = "Your browser does not support media capture.";
+          setStatus("Your browser does not support media capture.", true);
           recordButton.disabled = true;
           return;
         }
@@ -317,7 +342,13 @@
           }
         } catch (error) {
           console.error("Permission denied or no devices", error);
-          statusEl.textContent = "Unable to access video devices. Check permissions.";
+          const needsSecureContext = !isSecure
+            ? " (open this page via HTTPS or localhost)"
+            : "";
+          setStatus(
+            `Unable to access video devices. Check permissions${needsSecureContext}.`,
+            true
+          );
         }
       }
 
