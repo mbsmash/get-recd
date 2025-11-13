@@ -95,6 +95,10 @@
         <label for="videoSource">Video source</label>
         <select id="videoSource"></select>
       </div>
+      <div>
+        <label for="audioSource">Audio source</label>
+        <select id="audioSource"></select>
+      </div>
       <video id="preview" playsinline autoplay muted></video>
       <button id="saveLocationButton">Choose Save Location</button>
       <button id="recordButton" disabled>Start Recording</button>
@@ -102,6 +106,7 @@
     </main>
     <script>
       const videoSelect = document.getElementById("videoSource");
+      const audioSelect = document.getElementById("audioSource");
       const previewEl = document.getElementById("preview");
       const recordButton = document.getElementById("recordButton");
       const saveLocationButton = document.getElementById("saveLocationButton");
@@ -115,6 +120,7 @@
         typeof window.showSaveFilePicker === "function" && window.isSecureContext;
 
       const isSecure = window.isSecureContext;
+      let hasAudioInputs = false;
 
       function setStatus(message, isError = false) {
         statusEl.textContent = message;
@@ -150,64 +156,98 @@
         }
       }
 
-      async function populateVideoDevices(devices) {
-        const videoDevices = devices.filter((device) => device.kind === "videoinput");
-        const previousSelection = videoSelect.value;
-        videoSelect.innerHTML = "";
-
-        if (videoDevices.length === 0) {
+      function populateSelect(selectEl, devices, previousSelection, labelPrefix, emptyMessage) {
+        selectEl.innerHTML = "";
+        if (devices.length === 0) {
           const option = document.createElement("option");
-          option.textContent = "No video devices found";
+          option.textContent = emptyMessage;
           option.value = "";
-          videoSelect.appendChild(option);
-          recordButton.disabled = true;
-          setStatus("No video inputs available.", true);
-          return;
+          selectEl.appendChild(option);
+          return "";
         }
 
         let selectedDeviceId = "";
-
-        for (const device of videoDevices) {
+        devices.forEach((device, index) => {
           const option = document.createElement("option");
           option.value = device.deviceId;
-          option.textContent = device.label || `Camera ${videoSelect.length + 1}`;
+          option.textContent = device.label || `${labelPrefix} ${index + 1}`;
           if (!selectedDeviceId) {
             selectedDeviceId = device.deviceId;
           }
           if (previousSelection && previousSelection === device.deviceId) {
             selectedDeviceId = device.deviceId;
           }
-          videoSelect.appendChild(option);
+          selectEl.appendChild(option);
+        });
+
+        selectEl.value =
+          previousSelection && selectedDeviceId === previousSelection ? previousSelection : selectedDeviceId;
+        return selectEl.value;
+      }
+
+      async function populateDevices(devices) {
+        const videoDevices = devices.filter((device) => device.kind === "videoinput");
+        const audioDevices = devices.filter((device) => device.kind === "audioinput");
+
+        const previousVideoSelection = videoSelect.value;
+        const previousAudioSelection = audioSelect.value;
+
+        const chosenVideo = populateSelect(
+          videoSelect,
+          videoDevices,
+          previousVideoSelection,
+          "Camera",
+          "No video devices found"
+        );
+
+        hasAudioInputs = audioDevices.length > 0;
+        populateSelect(audioSelect, audioDevices, previousAudioSelection, "Microphone", "No microphones found");
+        audioSelect.disabled = !hasAudioInputs;
+
+        if (!chosenVideo) {
+          recordButton.disabled = true;
+          setStatus("No video inputs available.", true);
+          return;
         }
 
-        videoSelect.value = previousSelection && selectedDeviceId === previousSelection ? previousSelection : selectedDeviceId;
+        if (!hasAudioInputs) {
+          setStatus("No microphones detected. Recording will be silent.", true);
+        }
+
         updateRecordButtonState();
 
         if (!currentStream && videoSelect.value !== null) {
-          startPreview(videoSelect.value || undefined);
+          startPreview();
         }
       }
 
       async function refreshDevices() {
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
-          await populateVideoDevices(devices);
+          await populateDevices(devices);
         } catch (error) {
           console.error("Failed to enumerate devices", error);
           setStatus("Unable to list video devices.", true);
         }
       }
 
-      async function startPreview(deviceId) {
+      async function startPreview() {
         try {
           await stopStream(currentStream);
           const constraints = {
-            audio: false,
-            video: deviceId ? { deviceId: { exact: deviceId } } : true,
+            audio: hasAudioInputs
+              ? audioSelect.value
+                ? { deviceId: { exact: audioSelect.value } }
+                : true
+              : false,
+            video: videoSelect.value ? { deviceId: { exact: videoSelect.value } } : true,
           };
           currentStream = await navigator.mediaDevices.getUserMedia(constraints);
           previewEl.srcObject = currentStream;
-          setStatus("Previewing device.");
+          const previewMessage = hasAudioInputs
+            ? "Previewing device with audio."
+            : "Previewing video device. No microphones detected, so recording will be silent.";
+          setStatus(previewMessage, !hasAudioInputs);
           updateRecordButtonState();
         } catch (error) {
           console.error("Failed to start preview", error);
@@ -222,9 +262,13 @@
         }
       }
 
-      videoSelect.addEventListener("change", (event) => {
-        const deviceId = event.target.value;
-        startPreview(deviceId || undefined);
+      videoSelect.addEventListener("change", () => {
+        startPreview();
+      });
+
+      audioSelect.addEventListener("change", () => {
+        if (!hasAudioInputs) return;
+        startPreview();
       });
 
       saveLocationButton.addEventListener("click", async () => {
@@ -346,7 +390,18 @@
         }
 
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          const initialConstraints = { video: true, audio: true };
+          let stream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(initialConstraints);
+          } catch (error) {
+            if (error.name === "NotFoundError") {
+              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+              hasAudioInputs = false;
+            } else {
+              throw error;
+            }
+          }
           await stopStream(stream);
         } catch (error) {
           console.error("Permission denied or no devices", error);
@@ -360,7 +415,7 @@
         } finally {
           await refreshDevices();
           if (videoSelect.value) {
-            startPreview(videoSelect.value);
+            startPreview();
           }
         }
       }
