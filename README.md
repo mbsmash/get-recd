@@ -7,16 +7,6 @@ A single-page HTML app that lets you record gameplay or webcam footage directly 
 - **Secure context** – browsers require HTTPS (or `http://localhost`) for camera access and writable file handles. Opening `index.html` directly from disk will not work.
 - **Supported browser** – Chrome, Edge, Arc, and other Chromium-based browsers that expose the File System Access API can stream recordings straight to the drive you pick. Brave, Firefox, and Safari currently block this API, so the "Choose Save Location" button will stay disabled.
 
-## Running locally
-
-1. Clone this repository and `cd` into it.
-2. Serve the folder over HTTPS or `http://localhost`. For quick testing you can run:
-   ```bash
-   python3 -m http.server 4173
-   ```
-3. Visit `http://localhost:4173` in a supported browser.
-4. Approve the prompts for camera and microphone access when asked.
-
 To publish on GitHub Pages, push the repo to GitHub and enable Pages for the main branch. GitHub will host it over HTTPS automatically.
 
 ## Using the app
