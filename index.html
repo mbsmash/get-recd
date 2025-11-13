@@ -86,13 +86,6 @@
         opacity: 0.85;
       }
 
-      .download-link {
-        display: inline-block;
-        margin-top: 0.5rem;
-        text-decoration: none;
-        color: #fee3c8;
-        font-weight: 600;
-      }
     </style>
   </head>
   <body>
@@ -103,25 +96,41 @@
         <select id="videoSource"></select>
       </div>
       <video id="preview" playsinline autoplay muted></video>
+      <button id="saveLocationButton">Choose Save Location</button>
       <button id="recordButton" disabled>Start Recording</button>
       <div class="status" id="status"></div>
-      <div id="download"></div>
     </main>
     <script>
       const videoSelect = document.getElementById("videoSource");
       const previewEl = document.getElementById("preview");
       const recordButton = document.getElementById("recordButton");
+      const saveLocationButton = document.getElementById("saveLocationButton");
       const statusEl = document.getElementById("status");
-      const downloadEl = document.getElementById("download");
 
       let currentStream = null;
       let mediaRecorder = null;
-      let recordedChunks = [];
-      let downloadUrl = null;
+      let fileHandle = null;
+      let writableStream = null;
+      const supportsFileSystemAccess = typeof window.showSaveFilePicker === "function";
+
+      if (!supportsFileSystemAccess) {
+        saveLocationButton.disabled = true;
+        statusEl.textContent =
+          "This browser cannot choose a save location. Please use a Chromium-based browser.";
+      }
 
       async function stopStream(stream) {
         if (!stream) return;
         stream.getTracks().forEach((track) => track.stop());
+      }
+
+      function updateRecordButtonState() {
+        const readyToRecord = Boolean(currentStream && fileHandle);
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          recordButton.disabled = false;
+        } else {
+          recordButton.disabled = !readyToRecord;
+        }
       }
 
       async function populateVideoDevices(devices) {
@@ -145,7 +154,7 @@
           videoSelect.appendChild(option);
         }
 
-        recordButton.disabled = false;
+        updateRecordButtonState();
       }
 
       async function refreshDevices() {
@@ -168,6 +177,7 @@
           currentStream = await navigator.mediaDevices.getUserMedia(constraints);
           previewEl.srcObject = currentStream;
           statusEl.textContent = "Previewing device.";
+          updateRecordButtonState();
         } catch (error) {
           console.error("Failed to start preview", error);
           statusEl.textContent = "Failed to access the selected device.";
@@ -182,7 +192,34 @@
         }
       });
 
-      recordButton.addEventListener("click", () => {
+      saveLocationButton.addEventListener("click", async () => {
+        if (!supportsFileSystemAccess) {
+          statusEl.textContent =
+            "Selecting a save location requires a Chromium-based browser (Edge, Chrome).";
+          return;
+        }
+
+        try {
+          fileHandle = await window.showSaveFilePicker({
+            types: [
+              {
+                description: "WebM Video",
+                accept: { "video/webm": [".webm"] },
+              },
+            ],
+            suggestedName: `recording-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`,
+          });
+          statusEl.textContent = "Save location ready. Start recording when you're ready.";
+          updateRecordButtonState();
+        } catch (error) {
+          if (error.name !== "AbortError") {
+            console.error("Save location selection failed", error);
+            statusEl.textContent = "Unable to select a save location.";
+          }
+        }
+      });
+
+      recordButton.addEventListener("click", async () => {
         if (mediaRecorder && mediaRecorder.state === "recording") {
           mediaRecorder.stop();
           return;
@@ -193,7 +230,21 @@
           return;
         }
 
-        recordedChunks = [];
+        if (!fileHandle) {
+          statusEl.textContent = "Choose a save location before recording.";
+          return;
+        }
+
+        try {
+          writableStream = await fileHandle.createWritable();
+        } catch (error) {
+          console.error("Failed to open writable stream", error);
+          statusEl.textContent = "Could not open the selected file for writing.";
+          return;
+        }
+
+        saveLocationButton.disabled = true;
+
         try {
           mediaRecorder = new MediaRecorder(currentStream, {
             mimeType: "video/webm;codecs=vp9,opus",
@@ -203,9 +254,15 @@
           mediaRecorder = new MediaRecorder(currentStream);
         }
 
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0) {
-            recordedChunks.push(event.data);
+        mediaRecorder.ondataavailable = async (event) => {
+          if (event.data && event.data.size > 0 && writableStream) {
+            try {
+              await writableStream.write(event.data);
+            } catch (error) {
+              console.error("Failed to write chunk", error);
+              statusEl.textContent = "Writing to disk failed. Recording stopped.";
+              mediaRecorder?.stop();
+            }
           }
         };
 
@@ -213,27 +270,26 @@
           statusEl.textContent = "Recording...";
           recordButton.textContent = "Stop Recording";
           recordButton.disabled = false;
-          if (downloadUrl) {
-            URL.revokeObjectURL(downloadUrl);
-            downloadUrl = null;
-            downloadEl.innerHTML = "";
-          }
         };
 
-        mediaRecorder.onstop = () => {
-          statusEl.textContent = "Recording stopped.";
+        mediaRecorder.onstop = async () => {
           recordButton.textContent = "Start Recording";
-          recordButton.disabled = false;
-          const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-          downloadUrl = URL.createObjectURL(blob);
-
-          const link = document.createElement("a");
-          link.href = downloadUrl;
-          link.download = `recording-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
-          link.className = "download-link";
-          link.textContent = "Download recording";
-          downloadEl.innerHTML = "";
-          downloadEl.appendChild(link);
+          saveLocationButton.disabled = false;
+          if (writableStream) {
+            try {
+              await writableStream.close();
+              statusEl.textContent = "Recording saved to the selected location.";
+            } catch (error) {
+              console.error("Failed to close writable stream", error);
+              statusEl.textContent = "Recording finished, but saving may have failed.";
+            } finally {
+              writableStream = null;
+              fileHandle = null;
+            }
+          } else {
+            statusEl.textContent = "Recording stopped.";
+          }
+          updateRecordButtonState();
         };
 
         mediaRecorder.onerror = (event) => {
@@ -267,9 +323,8 @@
 
       window.addEventListener("beforeunload", () => {
         stopStream(currentStream);
-        if (downloadUrl) {
-          URL.revokeObjectURL(downloadUrl);
-        }
+        fileHandle = null;
+        writableStream = null;
       });
 
       init();
